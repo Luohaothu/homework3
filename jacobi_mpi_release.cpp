@@ -62,33 +62,21 @@ int main(int argc, char *argv[])
 				{
 					int len = (i == size - 1) ? (x_size / (size - 1)) : (x_size / (size - 1) + x_size % (size - 1));
 					MPI_Recv(grid0 + y_size*z_size, len*y_size*z_size, MPI_DOUBLE, 0, i, MPI_COMM_WORLD, &status);
-					/*if ((status).MPI_ERROR)
-					{
-					printf("Node %d receive error! Exiting...\n", rank);
-					printf("Error code: %d\n", MPI_Errhandler(status.MPI_ERROR));
-					exit((status).MPI_ERROR);
-					}
-					else
-					{
-					printf("Node %d receive successfully!\n", rank);
-					}*/
 				}
 			}
 
 		}
 	}
 	//Compute
+	if (rank == 0) printf("Start computing...\n");
 	if (rank != 0 && size > 1)
 	{
 		for (int t = 0; t < stepnum; t++)
 		{
-			printf("Start computing...Current time step is %d, form rank %d\n", t, rank);
 			compute(grid0, grid1, rank, size);
-			printf("finish compute\n");
 			//send right slice of data to next node, then receieve right slice of data form next node
-			/*if (rank < size - 1)
+			if (rank < size - 1)
 			{
-			printf("if 1\n");
 			MPI_Isend(grid1 + (1 + x_size / (size - 1))*y_size*z_size,
 			y_size*z_size, MPI_DOUBLE, rank + 1, rank, MPI_COMM_WORLD, &request1);
 			MPI_Irecv(grid1 + (1 + x_size / (size - 1))*y_size*z_size,
@@ -99,17 +87,11 @@ int main(int argc, char *argv[])
 			//receieve left slice of data from perior node, then send left slice of data to perior node
 			if (rank > 1)
 			{
-			printf("if 2\n");
 			MPI_Irecv(grid1, y_size*z_size, MPI_DOUBLE, rank - 1, rank - 1, MPI_COMM_WORLD, &request3);
 			MPI_Isend(grid1, y_size*z_size, MPI_DOUBLE, rank - 1, rank, MPI_COMM_WORLD, &request4);
 			MPI_Wait(&request3, &status3);
 			MPI_Wait(&request4, &status4);
-			}*/
-			/*MPI_Wait(&request1, &status1);
-			MPI_Wait(&request2, &status2);
-			MPI_Wait(&request3, &status3);
-			MPI_Wait(&request4, &status4);*/
-			
+			}
 			double *temp;
 			temp = grid0;
 			grid0 = grid1;
@@ -121,7 +103,6 @@ int main(int argc, char *argv[])
 	{
 		for (int t = 0; t < stepnum; t++)
 		{
-			printf("Start computing...Current time step is %d\n", t);
 			compute(grid0, grid1, rank, size);
 			double *temp;
 			temp = grid0;
@@ -131,9 +112,8 @@ int main(int argc, char *argv[])
 	}
 	else{ ; }
 	MPI_Barrier(MPI_COMM_WORLD);
-	printf("Finished computing!\n");
+	printf("Rank %d finished computing!\n", rank);
 	//Gather data form nodes to host
-	printf("Rank %d\n", rank);
 	if (size != 1)
 	{
 		if (stepnum % 2)
@@ -143,20 +123,13 @@ int main(int argc, char *argv[])
 			grid0 = grid1;
 			grid1 = temp;
 		}
-		printf("Step 1\n");
 		for (int i = 1; i < size; i++)
 		{
-			printf("Step 2 pre\n");
-			printf("rank %d, i %d\n", rank, i);
 			if (rank == i)
 			{
-				printf("Step 2 pre2\n");
 				int len = (i == size - 1) ? (x_size / (size - 1)) : (x_size / (size - 1) + x_size % (size - 1));
-				printf("Step 2 send: %d\n", i);
 				MPI_Isend(grid0 + y_size*z_size, len*y_size*z_size, MPI_DOUBLE, 0, i, MPI_COMM_WORLD, &request2);
 				MPI_Wait(&request2, &status2);
-				printf("Step 2 send: %d finished\n", i);
-
 			}
 		}
 		if (rank == 0)
@@ -164,27 +137,14 @@ int main(int argc, char *argv[])
 			for (int i = 1; i < size; i++)
 			{
 				int len = (i == size - 1) ? (x_size / (size - 1)) : (x_size / (size - 1) + x_size % (size - 1));
-				printf("Step 2: %d\n", i);
 				MPI_Irecv(grid1, len*y_size*z_size, MPI_DOUBLE, i, i, MPI_COMM_WORLD, &request1);
 				MPI_Wait(&request1, &status1);
-				printf("Step 2: %d finished\n", i);
-				/*if ((status).MPI_ERROR)
-				{
-					printf("Receive from node %d error! Exiting...", rank);
-					exit((status).MPI_ERROR);
-				}
-				else
-				{
-					printf("Receive from node %d successfully!", rank);
-				}*/
-
 			}
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
+	if(rank == 0) printf("All work complete\n");
 	MPI_Finalize();
-	printf("Complete\n");
-	//fflush(stdout);
 	return 0;
 }
 
