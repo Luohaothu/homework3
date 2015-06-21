@@ -5,7 +5,7 @@
 #include <xmmintrin.h>
 #include <mpi.h>
 
-#define stepnum 100
+#define stepnum 1000
 #define x_size (2 << 7)
 #define y_size (2 << 7)
 #define z_size (2 << 7)
