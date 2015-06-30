@@ -4,13 +4,13 @@
 #include <time.h>
 #include <xmmintrin.h>
 #include <mpi.h>
-#include <omp.h>
+
 #define stepnum 1000
-#define x_size (2 << 7)
-#define y_size (2 << 7)
-#define z_size (2 << 7)
-#define block_y_size (2 << 3)
-#define block_z_size (2 << 7)
+#define x_size (2 << 8)
+#define y_size (2 << 8)
+#define z_size (2 << 8)
+#define block_y_size (2 << 0)
+#define block_z_size (2 << 0)
 #define FINISHED_SIGNAL 1
 #define min(x,y) (x < y? x : y)
 #define GRID0 0
@@ -51,7 +51,8 @@ int main(int argc, char *argv[])
 			for (int i = 1; i < size; i++)
 			{
 				int len = (i == size - 1) ? (x_size / (size - 1)) : (x_size / (size - 1) + x_size % (size - 1));
-				MPI_Ssend(grid0 + (i - 1)*x_size / (size - 1), len*y_size*z_size, MPI_DOUBLE, i, i, MPI_COMM_WORLD);
+				MPI_Isend(grid0 + (i - 1)*x_size / (size - 1), len*y_size*z_size, MPI_DOUBLE, i, i, MPI_COMM_WORLD, &request1);
+				MPI_Wait(&request1, &status1);
 			}
 		}
 		else
@@ -61,7 +62,8 @@ int main(int argc, char *argv[])
 				if (rank == i)
 				{
 					int len = (i == size - 1) ? (x_size / (size - 1)) : (x_size / (size - 1) + x_size % (size - 1));
-					MPI_Recv(grid0 + y_size*z_size, len*y_size*z_size, MPI_DOUBLE, 0, i, MPI_COMM_WORLD, &status);
+					MPI_Irecv(grid0 + y_size*z_size, len*y_size*z_size, MPI_DOUBLE, 0, i, MPI_COMM_WORLD, &request2);
+					MPI_Wait(&request2, &status2);
 				}
 			}
 
@@ -77,20 +79,20 @@ int main(int argc, char *argv[])
 			//send right slice of data to next node, then receieve right slice of data form next node
 			if (rank < size - 1)
 			{
-			MPI_Isend(grid1 + (1 + x_size / (size - 1))*y_size*z_size,
-			y_size*z_size, MPI_DOUBLE, rank + 1, rank, MPI_COMM_WORLD, &request1);
-			MPI_Irecv(grid1 + (1 + x_size / (size - 1))*y_size*z_size,
-			y_size*z_size, MPI_DOUBLE, rank + 1, rank + 1, MPI_COMM_WORLD, &request2);
-			MPI_Wait(&request1, &status1);
-			MPI_Wait(&request2, &status2);
+				MPI_Isend(grid1 + (1 + x_size / (size - 1))*y_size*z_size,
+					y_size*z_size, MPI_DOUBLE, rank + 1, rank, MPI_COMM_WORLD, &request1);
+				MPI_Irecv(grid1 + (1 + x_size / (size - 1))*y_size*z_size,
+					y_size*z_size, MPI_DOUBLE, rank + 1, rank + 1, MPI_COMM_WORLD, &request2);
+				MPI_Wait(&request1, &status1);
+				MPI_Wait(&request2, &status2);
 			}
 			//receieve left slice of data from perior node, then send left slice of data to perior node
 			if (rank > 1)
 			{
-			MPI_Irecv(grid1, y_size*z_size, MPI_DOUBLE, rank - 1, rank - 1, MPI_COMM_WORLD, &request3);
-			MPI_Isend(grid1, y_size*z_size, MPI_DOUBLE, rank - 1, rank, MPI_COMM_WORLD, &request4);
-			MPI_Wait(&request3, &status3);
-			MPI_Wait(&request4, &status4);
+				MPI_Irecv(grid1, y_size*z_size, MPI_DOUBLE, rank - 1, rank - 1, MPI_COMM_WORLD, &request3);
+				MPI_Isend(grid1, y_size*z_size, MPI_DOUBLE, rank - 1, rank, MPI_COMM_WORLD, &request4);
+				MPI_Wait(&request3, &status3);
+				MPI_Wait(&request4, &status4);
 			}
 			double *temp;
 			temp = grid0;
@@ -110,7 +112,7 @@ int main(int argc, char *argv[])
 			grid1 = temp;
 		}
 	}
-	else{ ; }
+	else { ; }
 	MPI_Barrier(MPI_COMM_WORLD);
 	printf("Rank %d finished computing!\n", rank);
 	//Gather data form nodes to host
@@ -143,7 +145,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
-	if(rank == 0) printf("All work complete\n");
+	if (rank == 0) printf("All work complete\n");
 	MPI_Finalize();
 	return 0;
 }
@@ -210,7 +212,6 @@ void block(double* grid0, double* grid1, long x_s, long y_s, long z_s, int b_y_s
 {
 	register double one_six = 1 / 6;
 #pragma vector aligned
-#pragma omp parallel for num_threads(2) schedule (guided)
 	for (long b_j = 1; b_j < y_s - 1; b_j += b_y_s)
 	{
 		for (long b_k = 1; b_k < z_s - 1; b_k += b_z_s)
